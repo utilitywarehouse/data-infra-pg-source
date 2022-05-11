@@ -1,0 +1,41 @@
+http:
+  enabled: true
+  address: 0.0.0.0:${OPS_PORT}
+  root_path: /benthos
+  debug_endpoints: false
+  cert_file: ""
+  key_file: ""
+  cors:
+    enabled: false
+    allowed_origins: []
+input:
+  label: ""
+  generate:
+    interval: '${INTERVAL}'
+    mapping: 'root = {}'
+pipeline:
+  threads: 1
+  processors:
+  - sql_select:
+      driver: postgres
+      dsn: ${DSN}
+      table: ${TABLE}
+      columns: [ ${COLS:'*'} ]
+  - catch:
+     - log:
+          level: ERROR
+          message: "Processing failed due to: ${!error()}"
+  - pg_parquet:
+      dataProductID: ${DATA_PRODUCT_ID}
+  - catch:
+      - log:
+          level: ERROR
+          message: "Processing failed due to: ${!error()}"
+output:
+  gcp_cloud_storage:
+    bucket: ${GS_BUCKET}
+    path: ${DATA_PRODUCT_ID}/${DATA_PRODUCT_ID}-${!timestamp_unix_nano()}.parquet
+    content_type: application/octet-stream
+    collision_mode: overwrite
+    max_in_flight: 1
+shutdown_timeout: 20s
