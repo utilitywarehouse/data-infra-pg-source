@@ -8,7 +8,7 @@ require (
 	github.com/google/uuid v1.3.0
 	github.com/sirupsen/logrus v1.8.1
 	github.com/urfave/cli/v2 v2.6.0
-	github.com/utilitywarehouse/data-products-definitions v0.0.0-20220420133712-826ced6b2389
+	github.com/utilitywarehouse/data-products-definitions v0.0.0-20220530130237-8b28697a2e43
 )
 
 require (
