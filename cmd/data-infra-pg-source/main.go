@@ -9,7 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 	"github.com/utilitywarehouse/data-infra-pg-source/internal/benthos/parquet"
-	"github.com/utilitywarehouse/data-infra-pg-source/internal/catalog"
+	"github.com/utilitywarehouse/data-products-definitions/pkg/catalog/v1"
 )
 
 const appName = "data-infra-pg-source"

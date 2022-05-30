@@ -6,10 +6,9 @@ require (
 	github.com/benthosdev/benthos/v4 v4.0.0
 	github.com/fraugster/parquet-go v0.11.0
 	github.com/google/uuid v1.3.0
-	github.com/shopspring/decimal v1.3.1
 	github.com/sirupsen/logrus v1.8.1
 	github.com/urfave/cli/v2 v2.6.0
-	gopkg.in/yaml.v2 v2.4.0
+	github.com/utilitywarehouse/data-products-definitions v0.0.0-20220420133712-826ced6b2389
 )
 
 require (
@@ -158,6 +157,7 @@ require (
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/segmentio/ksuid v1.0.4 // indirect
+	github.com/shopspring/decimal v1.3.1 // indirect
 	github.com/smira/go-statsd v1.3.2 // indirect
 	github.com/snowflakedb/gosnowflake v1.6.6 // indirect
 	github.com/stretchr/testify v1.7.0 // indirect
@@ -198,5 +198,6 @@ require (
 	google.golang.org/grpc v1.43.0 // indirect
 	google.golang.org/protobuf v1.27.1 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
+	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 )

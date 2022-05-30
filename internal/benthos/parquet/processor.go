@@ -3,16 +3,15 @@ package parquet
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/benthosdev/benthos/v4/public/service"
 	goparquet "github.com/fraugster/parquet-go"
 	"github.com/fraugster/parquet-go/parquet"
 	"github.com/google/uuid"
-	"github.com/shopspring/decimal"
 	log "github.com/sirupsen/logrus"
-	"github.com/utilitywarehouse/data-infra-pg-source/internal/catalog"
+	"github.com/utilitywarehouse/data-products-definitions/pkg/catalog/v1"
 )
 
 func New(cat catalog.Catalog) error {
@@ -97,7 +96,19 @@ func (r *parquetProcessor) ProcessBatch(ctx context.Context, batch service.Messa
 				if !ok || dpv == nil {
 					continue
 				}
-				pqv, err := validateAndConvertToParquetType(dpv, dp.Type)
+				if dp.Type == catalog.DPType_Array || dp.Type == catalog.DPType_Object {
+					nestedPayload, ok := dpv.(string)
+					if !ok {
+						log.Panicf("Nested data point %v should be of type jsob", dp.Name)
+					}
+					var nested interface{}
+					if err := json.Unmarshal([]byte(nestedPayload), &nested); err != nil {
+						log.Panicf("Nested data point %v should be of type jsob", dp.Name)
+					}
+					dpv = nested
+				}
+
+				pqv, err := catalog.ValidateAndConvertToParquetType(dpv, dp)
 				if err != nil {
 					log.Panic(fmt.Errorf("data point %v err=(%v)", dp.Name, err))
 				}
@@ -118,101 +129,4 @@ func (r *parquetProcessor) ProcessBatch(ctx context.Context, batch service.Messa
 
 func (r *parquetProcessor) Close(ctx context.Context) error {
 	return nil
-}
-
-func validateAndConvertToParquetType(in interface{}, destType string) (interface{}, error) {
-	switch destType {
-	case "BOOLEAN":
-		cv, ok := in.(bool)
-		if !ok {
-			return nil, newValidationError(in, destType)
-		}
-		return cv, nil
-	case "INT64":
-		cv, ok := in.(int64)
-		if !ok {
-			return nil, newValidationError(in, destType)
-		}
-		return cv, nil
-	case "INT32":
-		cv, ok := in.(int64)
-		if !ok {
-			return nil, newValidationError(in, destType)
-		}
-		return int32(cv), nil
-	case "INT":
-		cv, ok := in.(int64)
-		if !ok {
-			return nil, newValidationError(in, destType)
-		}
-		return int32(cv), nil
-	// float32
-	case "FLOAT":
-		cv, ok := in.(float64)
-		if !ok {
-			return nil, newValidationError(in, destType)
-		}
-		return float32(cv), nil
-	// float64
-	case "DOUBLE":
-		cv, ok := in.(float64)
-		if !ok {
-			return nil, newValidationError(in, destType)
-		}
-		return cv, nil
-	case "UUID":
-		cv, ok := in.(string)
-		if !ok {
-			return nil, newValidationError(in, destType)
-		}
-		_, err := uuid.Parse(cv)
-		if err != nil {
-			return nil, newValidationError(in, destType)
-		}
-		return []byte(cv), nil
-	case "STRING":
-		cv, ok := in.(string)
-		if !ok {
-			return nil, newValidationError(in, destType)
-		}
-		return []byte(cv), nil
-	case "TIMESTAMP":
-		cv, ok := in.(time.Time)
-		if !ok {
-			return nil, newValidationError(in, destType)
-		}
-		return cv.UnixMilli(), nil
-	case "DATE":
-		cv, ok := in.(time.Time)
-		if !ok {
-			return nil, newValidationError(in, destType)
-		}
-		return int32(time.Duration(cv.UnixNano()) / time.Hour / 24), nil
-	case "DECIMAL":
-		cv, ok := in.(string)
-		if !ok {
-			return nil, newValidationError(in, destType)
-		}
-		cvd, err := decimal.NewFromString(cv)
-		if err != nil {
-			return nil, newValidationError(in, destType)
-		}
-		if cvd.Exponent() != -2 {
-			return nil, newValidationError(in, destType)
-		}
-		return cvd.CoefficientInt64(), nil
-	case "BYTE_ARRAY":
-		cv, ok := in.(string)
-		if !ok {
-			return nil, newValidationError(in, destType)
-		}
-		return []byte(cv), nil
-	default:
-		return nil, fmt.Errorf("unknown kind %s is unsupported", destType)
-	}
-}
-
-func newValidationError(in interface{}, destType string) error {
-	return fmt.Errorf("Could not convert %v of type %T to %v", in, in, destType)
-
 }
