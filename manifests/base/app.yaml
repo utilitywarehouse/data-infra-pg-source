@@ -1,0 +1,147 @@
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/path: /metrics
+    prometheus.io/port: "8081"
+  name: &app data-infra-pg-source
+  labels:
+    app: *app
+spec:
+  ports:
+    - name: ops
+      protocol: TCP
+      port: 8081
+  selector:
+    app: *app
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: &app data-infra-pg-source
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: *app
+  template:
+    metadata:
+      labels:
+        app: *app
+    spec:
+      securityContext:
+        fsGroup: 65533 # to make SSH key readable
+      initContainers:
+        - name: definitions-git-sync-init
+          image: gcr.io/google_containers/git-sync:v3.1.6
+          env:
+            - name: GIT_SYNC_REPO
+              value: "git@github.com:utilitywarehouse/data-products-definitions.git"
+            - name: GIT_SYNC_BRANCH
+              value: fake-dp
+            - name: GIT_SYNC_ONE_TIME
+              value: "true"
+            - name: GIT_SYNC_ROOT
+              value: /defs
+            - name: GIT_SSH_KEY_FILE
+              value: /ssh-repo-key/id_rsa
+            - name: GIT_SSH_KNOWN_HOSTS_FILE
+              value: /ssh-repo-key/known_hosts
+            - name: GIT_SYNC_DEST
+              value: "data-products-definitions"
+            - name: GIT_SYNC_SSH
+              value: "true"
+          securityContext:
+            runAsUser: 65533 # git-sync user
+          volumeMounts:
+            - name: ssh-repo-key
+              mountPath: /ssh-repo-key
+            - name: data-products-definitions
+              mountPath: /defs
+      containers:
+        - name: *app
+          env:
+            - name: OPS_PORT
+              value: "8081"
+            - name: LOG_LEVEL
+              value: debug
+            - name: LOG_FORMAT
+              value: json
+            - name: CATALOG_DIR
+              value: /defs/data-products-definitions/dev
+            - name: DATA_PRODUCT_ID
+              value: f2d62722-c9a4-4a27-b760-82e5eb302486
+            - name: INTERVAL
+              value: "@every 1m"
+            - name: DSN
+              value: "postgres://admin:admin@localhost:5432/test?sslmode=disable"
+            - name: TABLE
+              value: "testdp"
+            - name: GS_BUCKET
+              value: uw-data-platform-dev-data-infra
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: /gcp-key/key
+          volumeMounts:
+            - mountPath: /defs
+              name: data-products-definitions
+            - mountPath: /gcp-key
+              name: gcp-key
+          image: registry.uw.systems/data-platform/data-infra-pg-source:latest
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              cpu: 25m
+              memory: 50Mi
+            limits:
+              memory: 100Mi
+          ports:
+            - containerPort: 8081
+        - name: definitions-git-synk
+          image: gcr.io/google_containers/git-sync:v3.1.6
+          env:
+            - name: GIT_SYNC_REPO
+              value: "git@github.com:utilitywarehouse/data-products-definitions.git"
+            - name: GIT_SYNC_BRANCH
+              value: fake-dp
+            - name: GIT_SYNC_WAIT
+              value: "60"
+            - name: GIT_SYNC_MAX_SYNC_FAILURES
+              value: "5"
+            - name: GIT_SYNC_ROOT
+              value: /defs
+            - name: GIT_SSH_KEY_FILE
+              value: /ssh-repo-key/id_rsa
+            - name: GIT_SSH_KNOWN_HOSTS_FILE
+              value: /ssh-repo-key/known_hosts
+            - name: GIT_SYNC_DEST
+              value: "data-products-definitions"
+            - name: GIT_SYNC_SSH
+              value: "true"
+          securityContext:
+            runAsUser: 65533 # git-sync user
+          volumeMounts:
+            - name: ssh-repo-key
+              mountPath: /ssh-repo-key
+            - name: data-products-definitions
+              mountPath: /defs
+          resources:
+            requests:
+              cpu: 10m
+              memory: 50Mi
+            limits:
+              cpu: 100m
+              memory: 200Mi
+      imagePullSecrets:
+        - name: docker-registry-key
+      volumes:
+        - name: data-products-definitions
+          emptyDir: {}
+        - name: ssh-repo-key
+          secret:
+            secretName: data-products-definitions-git-key
+            defaultMode: 0400
+        - name: gcp-key
+          secret:
+            secretName: pg-source-gcp-key
+            defaultMode: 0400

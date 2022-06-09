@@ -2,6 +2,7 @@ FROM golang:1-alpine AS build
 
 RUN apk update && apk add make git gcc musl-dev
 
+ARG GITHUB_USER
 ARG GITHUB_TOKEN
 ARG SERVICE
 
