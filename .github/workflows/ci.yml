@@ -24,6 +24,7 @@ jobs:
         with:
           version: ${{ env.GOLANGCI_LINT_VERSION }}
           skip-go-installation: true
+          args: --timeout=3m0s
       - name: Test
         run: make all
   build:
