@@ -11,16 +11,15 @@ http:
 input:
   label: ""
   generate:
-    interval: '${INTERVAL}'
+    count: 1
     mapping: 'root = {}'
 pipeline:
   threads: 1
   processors:
-  - sql_select:
-      driver: postgres
+  - sql_raw:
+      driver: ${DRIVER}
       dsn: ${DSN}
-      table: ${TABLE}
-      columns: [ ${COLS:'*'} ]
+      query: ${QUERY}
   - catch:
      - log:
           level: ERROR

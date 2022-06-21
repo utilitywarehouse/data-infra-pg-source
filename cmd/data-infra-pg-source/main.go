@@ -44,12 +44,13 @@ func main() {
 				EnvVars: []string{"DSN"},
 			},
 			&cli.StringFlag{
-				Name:    "table",
-				EnvVars: []string{"TABLE"},
+				Name:    "driver",
+				Usage:   "postgres",
+				EnvVars: []string{"DRIVER"},
 			},
 			&cli.StringFlag{
-				Name:    "cols",
-				EnvVars: []string{"COLS"},
+				Name:    "query",
+				EnvVars: []string{"QUERY"},
 			},
 			&cli.StringFlag{
 				Name:    "gs-bucket",
