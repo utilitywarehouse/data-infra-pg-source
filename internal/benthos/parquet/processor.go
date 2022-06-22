@@ -77,12 +77,12 @@ func (r *parquetProcessor) ProcessBatch(ctx context.Context, batch service.Messa
 		}
 		payload, ok := str.([]interface{})
 		if !ok {
-			log.Panicf("Unexpected message type")
+			log.Panicf("Unexpected message type %T", str)
 		}
 		for _, part := range payload {
 			p, ok := part.(map[string]interface{})
 			if !ok {
-				log.Panicf("Unexpected message type")
+				log.Panicf("Unexpected message type %T", part)
 			}
 
 			dpPayload := make(map[string]interface{})
