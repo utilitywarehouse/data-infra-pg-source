@@ -75,49 +75,18 @@ func (r *parquetProcessor) ProcessBatch(ctx context.Context, batch service.Messa
 		if err != nil {
 			return nil, err
 		}
-		payload, ok := str.([]interface{})
-		if !ok {
+
+		switch payload := str.(type) {
+		case []interface{}:
+			for _, part := range payload {
+				processRow(part, def, fw)
+			}
+		case map[string]interface{}:
+			for _, part := range payload {
+				processRow(part, def, fw)
+			}
+		default:
 			log.Panicf("Unexpected message type %T", str)
-		}
-		for _, part := range payload {
-			p, ok := part.(map[string]interface{})
-			if !ok {
-				log.Panicf("Unexpected message type %T", part)
-			}
-
-			dpPayload := make(map[string]interface{})
-
-			for _, dp := range def.DataProduct.DataPoints {
-
-				dpv, ok := p[dp.Name]
-				if (!ok || dpv == nil) && !dp.Optional {
-					log.Panicf("Missing required data point %v", dp.Name)
-				}
-				if !ok || dpv == nil {
-					continue
-				}
-				if dp.Type == catalog.DPType_Array || dp.Type == catalog.DPType_Object {
-					nestedPayload, ok := dpv.(string)
-					if !ok {
-						log.Panicf("Nested data point %v should be of type jsob", dp.Name)
-					}
-					var nested interface{}
-					if err := json.Unmarshal([]byte(nestedPayload), &nested); err != nil {
-						log.Panicf("Nested data point %v should be of type jsob", dp.Name)
-					}
-					dpv = nested
-				}
-
-				pqv, err := catalog.ValidateAndConvertToParquetType(dpv, dp)
-				if err != nil {
-					log.Panic(fmt.Errorf("data point %v err=(%v)", dp.Name, err))
-				}
-				dpPayload[dp.Name] = pqv
-			}
-
-			if err := fw.AddData(dpPayload); err != nil {
-				log.Panicf("Error writing to parquet format %v", err)
-			}
 		}
 	}
 	if err := fw.Close(); err != nil {
@@ -129,4 +98,45 @@ func (r *parquetProcessor) ProcessBatch(ctx context.Context, batch service.Messa
 
 func (r *parquetProcessor) Close(ctx context.Context) error {
 	return nil
+}
+
+func processRow(row interface{}, def *catalog.Definition, fw *goparquet.FileWriter) {
+	p, ok := row.(map[string]interface{})
+	if !ok {
+		log.Panicf("Unexpected message type %T", row)
+	}
+
+	dpPayload := make(map[string]interface{})
+
+	for _, dp := range def.DataProduct.DataPoints {
+
+		dpv, ok := p[dp.Name]
+		if (!ok || dpv == nil) && !dp.Optional {
+			log.Panicf("Missing required data point %v", dp.Name)
+		}
+		if !ok || dpv == nil {
+			continue
+		}
+		if dp.Type == catalog.DPType_Array || dp.Type == catalog.DPType_Object {
+			nestedPayload, ok := dpv.(string)
+			if !ok {
+				log.Panicf("Nested data point %v should be of type jsob", dp.Name)
+			}
+			var nested interface{}
+			if err := json.Unmarshal([]byte(nestedPayload), &nested); err != nil {
+				log.Panicf("Nested data point %v should be of type jsob", dp.Name)
+			}
+			dpv = nested
+		}
+
+		pqv, err := catalog.ValidateAndConvertToParquetType(dpv, dp)
+		if err != nil {
+			log.Panic(fmt.Errorf("data point %v err=(%v)", dp.Name, err))
+		}
+		dpPayload[dp.Name] = pqv
+	}
+
+	if err := fw.AddData(dpPayload); err != nil {
+		log.Panicf("Error writing to parquet format %v", err)
+	}
 }
