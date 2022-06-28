@@ -2,13 +2,16 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"time"
 
 	_ "github.com/benthosdev/benthos/v4/public/components/all"
 	"github.com/benthosdev/benthos/v4/public/service"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 	"github.com/utilitywarehouse/data-infra-pg-source/internal/benthos/parquet"
+	_ "github.com/utilitywarehouse/data-infra-pg-source/internal/benthos/sql"
 	"github.com/utilitywarehouse/data-products-definitions/pkg/catalog/v1"
 )
 
@@ -67,6 +70,7 @@ func main() {
 			},
 		},
 		Action: func(c *cli.Context) error {
+			os.Setenv("CREATED_AT", fmt.Sprintf("%v", time.Now().Unix()))
 			cat := catalog.New(c.String("catalog-dir"))
 			if err := parquet.New(cat); err != nil {
 				return err

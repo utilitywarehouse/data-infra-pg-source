@@ -49,6 +49,7 @@ func newParquetProcessor(catalog catalog.Catalog, dataProductID string) *parquet
 }
 
 func (r *parquetProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	log.Printf("Parquet processor: processing batch of size %v\n", len(batch))
 	if len(batch) == 0 {
 		return nil, nil
 	}
@@ -75,19 +76,8 @@ func (r *parquetProcessor) ProcessBatch(ctx context.Context, batch service.Messa
 		if err != nil {
 			return nil, err
 		}
+		processRow(str, def, fw)
 
-		switch payload := str.(type) {
-		case []interface{}:
-			for _, part := range payload {
-				processRow(part, def, fw)
-			}
-		case map[string]interface{}:
-			for _, part := range payload {
-				processRow(part, def, fw)
-			}
-		default:
-			log.Panicf("Unexpected message type %T", str)
-		}
 	}
 	if err := fw.Close(); err != nil {
 		return nil, err
