@@ -29,7 +29,7 @@ func New(cat catalog.Catalog) error {
 		return newParquetProcessor(cat, dataProductID), nil
 	}
 
-	err := service.RegisterBatchProcessor("pg_parquet", configSpec, constructor)
+	err := service.RegisterBatchProcessor("uw_parquet", configSpec, constructor)
 	if err != nil {
 		return err
 	}
@@ -49,7 +49,7 @@ func newParquetProcessor(catalog catalog.Catalog, dataProductID string) *parquet
 }
 
 func (r *parquetProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
-	log.Printf("Parquet processor: processing batch of size %v\n", len(batch))
+	log.Printf("Parquet processor: processing batch of size %v", len(batch))
 	if len(batch) == 0 {
 		return nil, nil
 	}

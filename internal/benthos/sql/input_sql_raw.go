@@ -58,12 +58,12 @@ func init() {
 //------------------------------------------------------------------------------
 
 type sqlRawInput struct {
-	driver      string
-	dsn         string
-	queryStatic string
-	db          *sql.DB
-	rows        *sql.Rows
-	dbMut       sync.Mutex
+	driver string
+	dsn    string
+	query  string
+	db     *sql.DB
+	rows   *sql.Rows
+	dbMut  sync.Mutex
 
 	connSettings connSettings
 
@@ -82,7 +82,7 @@ func newSQLRawInputFromConfig(conf *service.ParsedConfig, logger *service.Logger
 		return nil, err
 	}
 
-	queryStatic, err := conf.FieldString("query")
+	query, err := conf.FieldString("query")
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +95,7 @@ func newSQLRawInputFromConfig(conf *service.ParsedConfig, logger *service.Logger
 	return &sqlRawInput{
 		driver:       driverStr,
 		dsn:          dsnStr,
-		queryStatic:  queryStatic,
+		query:        query,
 		connSettings: connSettings,
 		logger:       logger,
 		shutSig:      NewSignaller(),
@@ -117,7 +117,7 @@ func (s *sqlRawInput) Connect(ctx context.Context) (err error) {
 	s.connSettings.apply(db)
 
 	var rows *sql.Rows
-	if rows, err = db.QueryContext(context.Background(), s.queryStatic); err != nil {
+	if rows, err = db.QueryContext(context.Background(), s.query); err != nil {
 		return
 	}
 
