@@ -21,7 +21,7 @@ input:
 pipeline:
   threads: 1
   processors:
-  - pg_parquet:
+  - uw_parquet:
       dataProductID: ${DATA_PRODUCT_ID}
   - catch:
       - log:
