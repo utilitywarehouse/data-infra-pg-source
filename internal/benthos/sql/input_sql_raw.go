@@ -3,7 +3,6 @@ package sql
 import (
 	"context"
 	"database/sql"
-	"sync"
 
 	"github.com/benthosdev/benthos/v4/public/service"
 )
@@ -63,12 +62,10 @@ type sqlRawInput struct {
 	query  string
 	db     *sql.DB
 	rows   *sql.Rows
-	dbMut  sync.Mutex
 
 	connSettings connSettings
 
-	logger  *service.Logger
-	shutSig *Signaller
+	logger *service.Logger
 }
 
 func newSQLRawInputFromConfig(conf *service.ParsedConfig, logger *service.Logger) (*sqlRawInput, error) {
@@ -98,14 +95,10 @@ func newSQLRawInputFromConfig(conf *service.ParsedConfig, logger *service.Logger
 		query:        query,
 		connSettings: connSettings,
 		logger:       logger,
-		shutSig:      NewSignaller(),
 	}, nil
 }
 
 func (s *sqlRawInput) Connect(ctx context.Context) (err error) {
-	s.dbMut.Lock()
-	defer s.dbMut.Unlock()
-
 	if s.db != nil {
 		return nil
 	}
@@ -123,27 +116,11 @@ func (s *sqlRawInput) Connect(ctx context.Context) (err error) {
 
 	s.db = db
 	s.rows = rows
-	go func() {
-		<-s.shutSig.CloseNowChan()
-		s.dbMut.Lock()
-		if s.rows != nil {
-			_ = s.rows.Close()
-			s.rows = nil
-		}
-		if s.db != nil {
-			_ = s.db.Close()
-		}
-		s.dbMut.Unlock()
 
-		s.shutSig.ShutdownComplete()
-	}()
 	return nil
 }
 
 func (s *sqlRawInput) Read(ctx context.Context) (*service.Message, service.AckFunc, error) {
-	s.dbMut.Lock()
-	defer s.dbMut.Unlock()
-
 	if s.db == nil && s.rows == nil {
 		return nil, nil, service.ErrNotConnected
 	}
@@ -178,16 +155,24 @@ func (s *sqlRawInput) Read(ctx context.Context) (*service.Message, service.AckFu
 	}, nil
 }
 
+// Close the component, blocks until either the underlying resources are
+// cleaned up or the context is cancelled. Returns an error if the context
+// is cancelled.
 func (s *sqlRawInput) Close(ctx context.Context) error {
-	s.shutSig.CloseNow()
-	s.dbMut.Lock()
-	isNil := s.db == nil
-	s.dbMut.Unlock()
-	if isNil {
-		return nil
-	}
+	closeCtx, cancel := context.WithCancel(context.Background())
+	go func() {
+		if s.rows != nil {
+			_ = s.rows.Close()
+			s.rows = nil
+		}
+		if s.db != nil {
+			_ = s.db.Close()
+		}
+		cancel()
+	}()
+
 	select {
-	case <-s.shutSig.HasClosedChan():
+	case <-closeCtx.Done():
 	case <-ctx.Done():
 		return ctx.Err()
 	}
