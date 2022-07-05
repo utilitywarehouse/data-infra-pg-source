@@ -27,6 +27,7 @@ pipeline:
       - log:
           level: ERROR
           message: "Processing failed due to: ${!error()}"
+      - uw_terminate:    
 output:
   gcp_cloud_storage:
     bucket: ${GS_BUCKET}

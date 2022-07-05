@@ -16,13 +16,7 @@ import (
 const expectedCitizenID = "75d44fdc-dffd-42ea-af06-06fa4cb6fdbd"
 
 func TestParquetProcessor(t *testing.T) {
-	defer func() {
-		if r := recover(); r != nil {
-			t.Fatalf("Unexpected error %v", r)
-		}
-	}()
-
-	proc := newParquetProcessor(catalog.New("../../../testassets/datadefinitions"), "75d44fdc-dffd-42ea-af06-06fa4cb6fdbd")
+	proc := newParquetProcessor(catalog.New("../../../testassets/datadefinitions"), "75d44fdc-dffd-42ea-af06-06fa4cb6fdbd", service.MockResources().Logger())
 	result, err := proc.ProcessBatch(context.Background(), service.MessageBatch{service.NewMessage([]byte(fmt.Sprintf(`{"citizen_id": "%s"}`, expectedCitizenID)))})
 	if err != nil {
 		t.Fatalf("Unexpected error %v", err)
@@ -56,31 +50,17 @@ func TestParquetProcessor(t *testing.T) {
 }
 
 func TestParquetProcessorValidationError(t *testing.T) {
-	defer func() {
-		if r := recover(); r != nil {
-			return
-		}
-		t.Fatalf("Error expected")
-	}()
-
-	proc := newParquetProcessor(catalog.New("../../../testassets/datadefinitions"), "75d44fdc-dffd-42ea-af06-06fa4cb6fdbd")
+	proc := newParquetProcessor(catalog.New("../../../testassets/datadefinitions"), "75d44fdc-dffd-42ea-af06-06fa4cb6fdbd", service.MockResources().Logger())
 	_, err := proc.ProcessBatch(context.Background(), service.MessageBatch{service.NewMessage([]byte(`{"citizen_id": "asdf"}`))})
-	if err != nil {
-		t.Fatalf("Unexpected error %v", err)
+	if err == nil {
+		t.Fatal("Expected error")
 	}
 }
 
 func TestParquetProcessorMissingMandatoryField(t *testing.T) {
-	defer func() {
-		if r := recover(); r != nil {
-			return
-		}
-		t.Fatalf("Error expected")
-	}()
-
-	proc := newParquetProcessor(catalog.New("../../../testassets/datadefinitions"), "75d44fdc-dffd-42ea-af06-06fa4cb6fdbd")
+	proc := newParquetProcessor(catalog.New("../../../testassets/datadefinitions"), "75d44fdc-dffd-42ea-af06-06fa4cb6fdbd", service.MockResources().Logger())
 	_, err := proc.ProcessBatch(context.Background(), service.MessageBatch{service.NewMessage([]byte(`{"random": "asdf"}`))})
-	if err != nil {
-		t.Fatalf("Unexpected error %v", err)
+	if err == nil {
+		t.Fatal("Expected error")
 	}
 }

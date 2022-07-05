@@ -38,7 +38,7 @@ input:
 	return spec
 }
 
-func init() {
+func New() error {
 	err := service.RegisterInput(
 		"uw_sql_raw", RawInputConfig(),
 		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Input, error) {
@@ -50,11 +50,10 @@ func init() {
 		})
 
 	if err != nil {
-		panic(err)
+		return err
 	}
+	return nil
 }
-
-//------------------------------------------------------------------------------
 
 type sqlRawInput struct {
 	driver string

@@ -10,13 +10,12 @@ import (
 	goparquet "github.com/fraugster/parquet-go"
 	"github.com/fraugster/parquet-go/parquet"
 	"github.com/google/uuid"
-	log "github.com/sirupsen/logrus"
 	"github.com/utilitywarehouse/data-products-definitions/pkg/catalog/v1"
 )
 
 func New(cat catalog.Catalog) error {
 	configSpec := service.NewConfigSpec().
-		Summary("Processor for generating parquet files using sql-select input. Expects postgres data types.").
+		Summary("Processor for generating parquet files using sql_raw input.").
 		Field(service.NewStringField("dataProductID").
 			Description("Data product id defined in the data-products-definitions").
 			Example(uuid.NewString()))
@@ -26,7 +25,7 @@ func New(cat catalog.Catalog) error {
 		if err != nil {
 			return nil, err
 		}
-		return newParquetProcessor(cat, dataProductID), nil
+		return newParquetProcessor(cat, dataProductID, mgr.Logger()), nil
 	}
 
 	err := service.RegisterBatchProcessor("uw_parquet", configSpec, constructor)
@@ -39,29 +38,31 @@ func New(cat catalog.Catalog) error {
 type parquetProcessor struct {
 	catalog       catalog.Catalog
 	dataProductID string
+	logger        *service.Logger
 }
 
-func newParquetProcessor(catalog catalog.Catalog, dataProductID string) *parquetProcessor {
+func newParquetProcessor(catalog catalog.Catalog, dataProductID string, logger *service.Logger) *parquetProcessor {
 	return &parquetProcessor{
 		catalog:       catalog,
 		dataProductID: dataProductID,
+		logger:        logger,
 	}
 }
 
 func (r *parquetProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
-	log.Printf("Parquet processor: processing batch of size %v", len(batch))
+	r.logger.Infof("Parquet processor: processing batch of size %v", len(batch))
 	if len(batch) == 0 {
 		return nil, nil
 	}
 
 	def, err := r.catalog.GetByID(r.dataProductID)
 	if err != nil {
-		log.Panicf("Could not find data product with id %v err=%v", r.dataProductID, err)
+		return nil, fmt.Errorf("Could not find data product with id %v err=%v", r.dataProductID, err)
 	}
 
 	schemaDef, err := catalog.ToParquetSchema(*def)
 	if err != nil {
-		log.Panic(err)
+		return nil, err
 	}
 
 	buf := bytes.Buffer{}
@@ -76,7 +77,9 @@ func (r *parquetProcessor) ProcessBatch(ctx context.Context, batch service.Messa
 		if err != nil {
 			return nil, err
 		}
-		processRow(str, def, fw)
+		if err := processRow(str, def, fw); err != nil {
+			return nil, err
+		}
 
 	}
 	if err := fw.Close(); err != nil {
@@ -90,10 +93,10 @@ func (r *parquetProcessor) Close(ctx context.Context) error {
 	return nil
 }
 
-func processRow(row interface{}, def *catalog.Definition, fw *goparquet.FileWriter) {
+func processRow(row interface{}, def *catalog.Definition, fw *goparquet.FileWriter) error {
 	p, ok := row.(map[string]interface{})
 	if !ok {
-		log.Panicf("Unexpected message type %T", row)
+		return fmt.Errorf("Unexpected message type %T", row)
 	}
 
 	dpPayload := make(map[string]interface{})
@@ -102,7 +105,7 @@ func processRow(row interface{}, def *catalog.Definition, fw *goparquet.FileWrit
 
 		dpv, ok := p[dp.Name]
 		if (!ok || dpv == nil) && !dp.Optional {
-			log.Panicf("Missing required data point %v", dp.Name)
+			return fmt.Errorf("Missing required data point %v", dp.Name)
 		}
 		if !ok || dpv == nil {
 			continue
@@ -110,23 +113,24 @@ func processRow(row interface{}, def *catalog.Definition, fw *goparquet.FileWrit
 		if dp.Type == catalog.DPType_Array || dp.Type == catalog.DPType_Object {
 			nestedPayload, ok := dpv.(string)
 			if !ok {
-				log.Panicf("Nested data point %v should be of type jsob", dp.Name)
+				return fmt.Errorf("Nested data point %v should be of type jsob", dp.Name)
 			}
 			var nested interface{}
 			if err := json.Unmarshal([]byte(nestedPayload), &nested); err != nil {
-				log.Panicf("Nested data point %v should be of type jsob", dp.Name)
+				return fmt.Errorf("Nested data point %v should be of type jsob", dp.Name)
 			}
 			dpv = nested
 		}
 
 		pqv, err := catalog.ValidateAndConvertToParquetType(dpv, dp)
 		if err != nil {
-			log.Panic(fmt.Errorf("data point %v err=(%v)", dp.Name, err))
+			return fmt.Errorf("data point %v err=(%v)", dp.Name, err)
 		}
 		dpPayload[dp.Name] = pqv
 	}
 
 	if err := fw.AddData(dpPayload); err != nil {
-		log.Panicf("Error writing to parquet format %v", err)
+		return fmt.Errorf("Error writing to parquet format %v", err)
 	}
+	return nil
 }

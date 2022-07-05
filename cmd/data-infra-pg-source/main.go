@@ -11,7 +11,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 	"github.com/utilitywarehouse/data-infra-pg-source/internal/benthos/parquet"
-	_ "github.com/utilitywarehouse/data-infra-pg-source/internal/benthos/sql"
+	"github.com/utilitywarehouse/data-infra-pg-source/internal/benthos/sql"
+	"github.com/utilitywarehouse/data-infra-pg-source/internal/benthos/terminate"
 	"github.com/utilitywarehouse/data-products-definitions/pkg/catalog/v1"
 )
 
@@ -70,6 +71,13 @@ func main() {
 			},
 		},
 		Action: func(c *cli.Context) error {
+			if err := sql.New(); err != nil {
+				return err
+			}
+			if err := terminate.New(); err != nil {
+				return err
+			}
+
 			os.Setenv("CREATED_AT", fmt.Sprintf("%v", time.Now().Unix()))
 			cat := catalog.New(c.String("catalog-dir"))
 			if err := parquet.New(cat); err != nil {
