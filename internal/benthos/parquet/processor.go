@@ -10,13 +10,12 @@ import (
 	goparquet "github.com/fraugster/parquet-go"
 	"github.com/fraugster/parquet-go/parquet"
 	"github.com/google/uuid"
-	log "github.com/sirupsen/logrus"
 	"github.com/utilitywarehouse/data-products-definitions/pkg/catalog/v1"
 )
 
 func New(cat catalog.Catalog) error {
 	configSpec := service.NewConfigSpec().
-		Summary("Processor for generating parquet files using sql-select input. Expects postgres data types.").
+		Summary("Processor for generating parquet files using sql_raw input.").
 		Field(service.NewStringField("dataProductID").
 			Description("Data product id defined in the data-products-definitions").
 			Example(uuid.NewString()))
@@ -26,10 +25,10 @@ func New(cat catalog.Catalog) error {
 		if err != nil {
 			return nil, err
 		}
-		return newParquetProcessor(cat, dataProductID), nil
+		return newParquetProcessor(cat, dataProductID, mgr.Logger()), nil
 	}
 
-	err := service.RegisterBatchProcessor("pg_parquet", configSpec, constructor)
+	err := service.RegisterBatchProcessor("uw_parquet", configSpec, constructor)
 	if err != nil {
 		return err
 	}
@@ -39,28 +38,31 @@ func New(cat catalog.Catalog) error {
 type parquetProcessor struct {
 	catalog       catalog.Catalog
 	dataProductID string
+	logger        *service.Logger
 }
 
-func newParquetProcessor(catalog catalog.Catalog, dataProductID string) *parquetProcessor {
+func newParquetProcessor(catalog catalog.Catalog, dataProductID string, logger *service.Logger) *parquetProcessor {
 	return &parquetProcessor{
 		catalog:       catalog,
 		dataProductID: dataProductID,
+		logger:        logger,
 	}
 }
 
 func (r *parquetProcessor) ProcessBatch(ctx context.Context, batch service.MessageBatch) ([]service.MessageBatch, error) {
+	r.logger.Infof("Parquet processor: processing batch of size %v", len(batch))
 	if len(batch) == 0 {
 		return nil, nil
 	}
 
 	def, err := r.catalog.GetByID(r.dataProductID)
 	if err != nil {
-		log.Panicf("Could not find data product with id %v err=%v", r.dataProductID, err)
+		return nil, fmt.Errorf("could not find data product with id %v err=%v", r.dataProductID, err)
 	}
 
 	schemaDef, err := catalog.ToParquetSchema(*def)
 	if err != nil {
-		log.Panic(err)
+		return nil, err
 	}
 
 	buf := bytes.Buffer{}
@@ -75,50 +77,10 @@ func (r *parquetProcessor) ProcessBatch(ctx context.Context, batch service.Messa
 		if err != nil {
 			return nil, err
 		}
-		payload, ok := str.([]interface{})
-		if !ok {
-			log.Panicf("Unexpected message type")
+		if err := processRow(str, def, fw); err != nil {
+			return nil, err
 		}
-		for _, part := range payload {
-			p, ok := part.(map[string]interface{})
-			if !ok {
-				log.Panicf("Unexpected message type")
-			}
 
-			dpPayload := make(map[string]interface{})
-
-			for _, dp := range def.DataProduct.DataPoints {
-
-				dpv, ok := p[dp.Name]
-				if (!ok || dpv == nil) && !dp.Optional {
-					log.Panicf("Missing required data point %v", dp.Name)
-				}
-				if !ok || dpv == nil {
-					continue
-				}
-				if dp.Type == catalog.DPType_Array || dp.Type == catalog.DPType_Object {
-					nestedPayload, ok := dpv.(string)
-					if !ok {
-						log.Panicf("Nested data point %v should be of type jsob", dp.Name)
-					}
-					var nested interface{}
-					if err := json.Unmarshal([]byte(nestedPayload), &nested); err != nil {
-						log.Panicf("Nested data point %v should be of type jsob", dp.Name)
-					}
-					dpv = nested
-				}
-
-				pqv, err := catalog.ValidateAndConvertToParquetType(dpv, dp)
-				if err != nil {
-					log.Panic(fmt.Errorf("data point %v err=(%v)", dp.Name, err))
-				}
-				dpPayload[dp.Name] = pqv
-			}
-
-			if err := fw.AddData(dpPayload); err != nil {
-				log.Panicf("Error writing to parquet format %v", err)
-			}
-		}
 	}
 	if err := fw.Close(); err != nil {
 		return nil, err
@@ -128,5 +90,47 @@ func (r *parquetProcessor) ProcessBatch(ctx context.Context, batch service.Messa
 }
 
 func (r *parquetProcessor) Close(ctx context.Context) error {
+	return nil
+}
+
+func processRow(row interface{}, def *catalog.Definition, fw *goparquet.FileWriter) error {
+	p, ok := row.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("unexpected message type %T", row)
+	}
+
+	dpPayload := make(map[string]interface{})
+
+	for _, dp := range def.DataProduct.DataPoints {
+
+		dpv, ok := p[dp.Name]
+		if (!ok || dpv == nil) && !dp.Optional {
+			return fmt.Errorf("missing required data point %v", dp.Name)
+		}
+		if !ok || dpv == nil {
+			continue
+		}
+		if dp.Type == catalog.DPType_Array || dp.Type == catalog.DPType_Object {
+			nestedPayload, ok := dpv.(string)
+			if !ok {
+				return fmt.Errorf("nested data point %v should be of type jsob", dp.Name)
+			}
+			var nested interface{}
+			if err := json.Unmarshal([]byte(nestedPayload), &nested); err != nil {
+				return fmt.Errorf("nested data point %v should be of type jsob", dp.Name)
+			}
+			dpv = nested
+		}
+
+		pqv, err := catalog.ValidateAndConvertToParquetType(dpv, dp)
+		if err != nil {
+			return fmt.Errorf("data point %v err=(%v)", dp.Name, err)
+		}
+		dpPayload[dp.Name] = pqv
+	}
+
+	if err := fw.AddData(dpPayload); err != nil {
+		return fmt.Errorf("error writing to parquet format %v", err)
+	}
 	return nil
 }

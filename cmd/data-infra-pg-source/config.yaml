@@ -9,32 +9,29 @@ http:
     enabled: false
     allowed_origins: []
 input:
-  label: ""
-  generate:
-    interval: '${INTERVAL}'
-    mapping: 'root = {}'
+  broker:
+    inputs:
+      - uw_sql_raw:
+          driver: ${DRIVER}
+          dsn: ${DSN}
+          query: ${QUERY}
+    batching:
+      count: 100000
+      period: 2m
 pipeline:
   threads: 1
   processors:
-  - sql_select:
-      driver: postgres
-      dsn: ${DSN}
-      table: ${TABLE}
-      columns: [ ${COLS:'*'} ]
-  - catch:
-     - log:
-          level: ERROR
-          message: "Processing failed due to: ${!error()}"
-  - pg_parquet:
+  - uw_parquet:
       dataProductID: ${DATA_PRODUCT_ID}
   - catch:
       - log:
           level: ERROR
           message: "Processing failed due to: ${!error()}"
+      - uw_terminate:    
 output:
   gcp_cloud_storage:
     bucket: ${GS_BUCKET}
-    path: ${DATA_PRODUCT_ID}/${DATA_PRODUCT_ID}-${!timestamp_unix_nano()}.parquet
+    path: ${DATA_PRODUCT_ID}/${DATA_PRODUCT_ID}-${CREATED_AT}_${!count("files")}.parquet
     content_type: application/octet-stream
     collision_mode: overwrite
     max_in_flight: 1

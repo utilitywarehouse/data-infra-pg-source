@@ -1,0 +1,39 @@
+definition:
+  id: 75d44fdc-dffd-42ea-af06-06fa4cb6fdbd
+  fqn: caps.v1.consent_and_preference
+  description: "Current state of the Consent and Preference"
+  dataPoints:
+    - name: citizen_id
+      type: UUID
+      description: "The unique identifier for the Citizen (user that can consent)."
+      optional: false
+      egress:
+        braze:
+          identity: "external_id"
+    - name: consent_references
+      type: ARRAY
+      description: "List of the Citizen consents with their statuses"
+      optional: true
+      egress:
+        braze:
+          name: consent_and_preference.consent_references
+      items:
+        type: OBJECT
+        optional: true
+        properties:
+          - name: consent_reference
+            type: STRING
+            description: "The unique identifier of the consent that Citizen can agree/ disagree on- eg. email-insurance-XXX."
+            optional: true
+          - name: is_consented
+            type: BOOLEAN
+            description: "Did Citizen consented?"
+            optional: true
+          - name: update_at
+            type: TIMESTAMP
+            description: "Timestamp of the last update."
+            optional: true
+          - name: expires_at
+            type: TIMESTAMP
+            description: "Timestamp after which consent will expire."
+            optional: true
