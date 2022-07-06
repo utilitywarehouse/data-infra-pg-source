@@ -57,7 +57,7 @@ func (r *parquetProcessor) ProcessBatch(ctx context.Context, batch service.Messa
 
 	def, err := r.catalog.GetByID(r.dataProductID)
 	if err != nil {
-		return nil, fmt.Errorf("Could not find data product with id %v err=%v", r.dataProductID, err)
+		return nil, fmt.Errorf("could not find data product with id %v err=%v", r.dataProductID, err)
 	}
 
 	schemaDef, err := catalog.ToParquetSchema(*def)
@@ -96,7 +96,7 @@ func (r *parquetProcessor) Close(ctx context.Context) error {
 func processRow(row interface{}, def *catalog.Definition, fw *goparquet.FileWriter) error {
 	p, ok := row.(map[string]interface{})
 	if !ok {
-		return fmt.Errorf("Unexpected message type %T", row)
+		return fmt.Errorf("unexpected message type %T", row)
 	}
 
 	dpPayload := make(map[string]interface{})
@@ -105,7 +105,7 @@ func processRow(row interface{}, def *catalog.Definition, fw *goparquet.FileWrit
 
 		dpv, ok := p[dp.Name]
 		if (!ok || dpv == nil) && !dp.Optional {
-			return fmt.Errorf("Missing required data point %v", dp.Name)
+			return fmt.Errorf("missing required data point %v", dp.Name)
 		}
 		if !ok || dpv == nil {
 			continue
@@ -113,11 +113,11 @@ func processRow(row interface{}, def *catalog.Definition, fw *goparquet.FileWrit
 		if dp.Type == catalog.DPType_Array || dp.Type == catalog.DPType_Object {
 			nestedPayload, ok := dpv.(string)
 			if !ok {
-				return fmt.Errorf("Nested data point %v should be of type jsob", dp.Name)
+				return fmt.Errorf("nested data point %v should be of type jsob", dp.Name)
 			}
 			var nested interface{}
 			if err := json.Unmarshal([]byte(nestedPayload), &nested); err != nil {
-				return fmt.Errorf("Nested data point %v should be of type jsob", dp.Name)
+				return fmt.Errorf("nested data point %v should be of type jsob", dp.Name)
 			}
 			dpv = nested
 		}
@@ -130,7 +130,7 @@ func processRow(row interface{}, def *catalog.Definition, fw *goparquet.FileWrit
 	}
 
 	if err := fw.AddData(dpPayload); err != nil {
-		return fmt.Errorf("Error writing to parquet format %v", err)
+		return fmt.Errorf("error writing to parquet format %v", err)
 	}
 	return nil
 }
